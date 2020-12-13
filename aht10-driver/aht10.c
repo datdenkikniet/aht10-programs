@@ -1,3 +1,17 @@
+/*
+ AHT10 Temperature and Humidity sensor sysfs driver
+ Copyright (C) 2020 Johannes Cornelis Draaijer
+
+ This program is free software; you can redistribute it and/or
+ modify it under the terms of the GNU General Public License
+ as published by the Free Software Foundation; either version 2
+ of the License, or (at your option) any later version.
+
+ This program is distributed in the hope that it will be useful,
+ but WITHOUT ANY WARRANTY; without even the implied warranty of
+ MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ GNU General Public License for more details.
+*/
 #include <linux/module.h>
 #include <linux/kernel.h>
 #include <linux/mod_devicetable.h>
@@ -36,6 +50,10 @@
 
 // Full commands
 
+const u8 cmd_init[] = {AHT10_CMD_INIT, AHT10_CAL_ENABLED | AHT10_MODE_CYC, 0x00};
+const u8 cmd_meas[] = {AHT10_CMD_MEAS, 0x33, 0x00};
+const u8 cmd_rst[] = {AHT10_CMD_RST, 0x00, 0x00};
+
 struct aht10_measurement {
     u8 data[6];
     u8 status;
@@ -52,10 +70,6 @@ struct aht10_data {
     ktime_t poll_interval;
     ktime_t previous_poll_time;
 };
-
-const u8 cmd_init[] = {AHT10_CMD_INIT, AHT10_CAL_ENABLED | AHT10_MODE_CYC, 0x00};
-const u8 cmd_meas[] = {AHT10_CMD_MEAS, 0x33, 0x00};
-const u8 cmd_rst[] = {AHT10_CMD_RST, 0x00, 0x00};
 
 static int aht10_init(struct i2c_client *client)
 {
