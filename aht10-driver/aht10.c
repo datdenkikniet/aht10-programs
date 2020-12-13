@@ -105,9 +105,9 @@ static int aht10_init(struct i2c_client *client, struct aht10_data *data)
 
         usleep_range(AHT10_POWERON_USEC_DELAY, AHT10_POWERON_USEC_DELAY + 
                 AHT10_USEC_DELAY_OFFSET);
-        
+
         i2c_master_send(client, cmd_init, 3);
-        
+
         usleep_range(AHT10_CMD_USEC_DELAY, AHT10_CMD_USEC_DELAY + 
                 AHT10_USEC_DELAY_OFFSET);
 
@@ -221,8 +221,7 @@ static ssize_t temperature_show(struct device *dev,
                 aht10_read_data(client, data, measurement);
         }
 
-        bytes_written = sprintf(buf, "%d.%d", measurement->temperature / 100, 
-                                measurement->temperature % 100);
+        bytes_written = sprintf(buf, "%d", measurement->temperature * 10);
         return bytes_written;
 }
 
@@ -242,8 +241,7 @@ static ssize_t humidity_show(struct device *dev,
                 aht10_read_data(client, data, measurement);
         }
 
-        bytes_written = sprintf(buf, "%d.%d", measurement->humidity / 100, 
-                                measurement->humidity % 100);
+        bytes_written = sprintf(buf, "%d", measurement->humidity * 10);
         return bytes_written;
 }
 
