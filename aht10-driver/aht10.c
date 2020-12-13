@@ -12,6 +12,7 @@
  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  GNU General Public License for more details.
 */
+
 #include <linux/module.h>
 #include <linux/kernel.h>
 #include <linux/mod_devicetable.h>
@@ -30,6 +31,7 @@
 #define AHT10_MEAS_USEC_DELAY 80000
 #define AHT10_CMD_USEC_DELAY 350000
 #define AHT10_USEC_DELAY_OFFSET 100000
+
 // Command bytes
 
 #define AHT10_CMD_INIT 0b11100001
@@ -80,6 +82,7 @@ static int aht10_init(struct i2c_client *client)
     u8 status;
 
     mutex_lock(mutex);
+
     usleep_range(AHT10_POWERON_USEC_DELAY, AHT10_POWERON_USEC_DELAY + AHT10_USEC_DELAY_OFFSET);
     i2c_master_send(client, cmd_init, 3);
     usleep_range(AHT10_CMD_USEC_DELAY, AHT10_CMD_USEC_DELAY + AHT10_USEC_DELAY_OFFSET);
@@ -94,7 +97,7 @@ static int aht10_init(struct i2c_client *client)
     data->initialized = 1;
 
     if (status & AHT10_BUSY) {
-        pr_warn("AHT10 busy flag is enabled! Is another program already using the AHT10?");
+        pr_warn("AHT10 busy flag is enabled! Is another program already using the AHT10?\n");
     }
 
     mutex_unlock(mutex);
@@ -160,7 +163,7 @@ static int aht10_check_and_set_polltime(struct aht10_data *data)
     return 0;
 }
 
-static ssize_t aht10_show_temperature(struct device *dev,
+static ssize_t temperature_show(struct device *dev,
                                     struct device_attribute *attr, char* buf)
 {
     int bytes_written;
@@ -176,7 +179,7 @@ static ssize_t aht10_show_temperature(struct device *dev,
     return bytes_written;
 }
 
-static ssize_t aht10_show_humidity(struct device *dev,
+static ssize_t humidity_show(struct device *dev,
                                     struct device_attribute *attr, char* buf)
 {
     int bytes_written;
@@ -192,7 +195,7 @@ static ssize_t aht10_show_humidity(struct device *dev,
     return bytes_written;
 }
 
-static ssize_t aht10_store_reset(struct device *dev,
+static ssize_t reset_store(struct device *dev,
                         struct device_attribute *attr, const char *buf, size_t count)
 {
     // struct i2c_client *client = dev_get_drvdata(dev);
@@ -201,7 +204,7 @@ static ssize_t aht10_store_reset(struct device *dev,
     return count;
 }
 
-static ssize_t aht10_show_min_poll(struct device *dev,
+static ssize_t min_poll_interval_show(struct device *dev,
                                     struct device_attribute *attr, char* buf)
 {
     struct i2c_client *client = dev_get_drvdata(dev);
@@ -214,7 +217,7 @@ static ssize_t aht10_show_min_poll(struct device *dev,
     return bytes_written;
 }
 
-static ssize_t aht10_store_min_poll(struct device *dev,
+static ssize_t min_poll_interval_store(struct device *dev,
                         struct device_attribute *attr, const char *buf, size_t count)
 {
     struct i2c_client *client = dev_get_drvdata(dev);
@@ -246,16 +249,16 @@ static ssize_t aht10_store_min_poll(struct device *dev,
     return count;
 }
 
-static DEVICE_ATTR(reset, 0200, NULL, aht10_store_reset);
-static DEVICE_ATTR(temperature, 0444, aht10_show_temperature, NULL);
-static DEVICE_ATTR(humidity, 0444, aht10_show_humidity, NULL);
-static DEVICE_ATTR(minimum_poll_interval, 0644, aht10_show_min_poll, aht10_store_min_poll);
+static DEVICE_ATTR_WO(reset);
+static DEVICE_ATTR_RO(temperature);
+static DEVICE_ATTR_RO(humidity);
+static DEVICE_ATTR_RW(min_poll_interval);
 
 static struct attribute *aht10_attributes[] = {
     &dev_attr_reset.attr,
     &dev_attr_temperature.attr,
     &dev_attr_humidity.attr,
-    &dev_attr_minimum_poll_interval.attr,
+    &dev_attr_min_poll_interval.attr,
     NULL,
 };
 
@@ -307,16 +310,20 @@ static int aht10_probe(struct i2c_client *client,
         return 4;
     }
 
-    pr_info("Succesfully registered AHT10\n");
+    pr_info("AHT10 was detected and registered\n");
     return 0;
 }
 
 static int aht10_remove(struct i2c_client *client){
+    if (client->addr != AHT10_ADDR){
+        return 0;
+    }
+
     if (dev) {
         root_device_unregister(dev);
     }
 
-    pr_info("Unregistered AHT10 driver\n");
+    pr_info("AHT10 was removed\n");
     return 0;
 }
 
