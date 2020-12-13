@@ -368,6 +368,7 @@ static int aht10_remove(struct i2c_client *client){
         if (client->addr != AHT10_ADDR){
                 return 0;
         }
+        
         pr_info("AHT10 was removed\n");
         return 0;
 }
