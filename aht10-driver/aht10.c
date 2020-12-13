@@ -57,10 +57,10 @@ const u8 cmd_meas[] = {AHT10_CMD_MEAS, 0x33, 0x00};
 const u8 cmd_rst[] = {AHT10_CMD_RST, 0x00, 0x00};
 
 struct aht10_measurement {
-    u8 data[6];
-    u8 status;
-    int temperature;
-    int humidity;
+        u8 data[6];
+        u8 status;
+        int temperature;
+        int humidity;
 };
 
 /**
@@ -77,12 +77,12 @@ struct aht10_measurement {
 */
 
 struct aht10_data {
-    struct i2c_client *client;
-    struct mutex lock;
-    int initialized;
-    struct aht10_measurement current_measurement;
-    ktime_t poll_interval;
-    ktime_t previous_poll_time;
+        struct i2c_client *client;
+        struct mutex lock;
+        int initialized;
+        struct aht10_measurement current_measurement;
+        ktime_t poll_interval;
+        ktime_t previous_poll_time;
 };
 
 
@@ -93,33 +93,37 @@ struct aht10_data {
 */
 static int aht10_init(struct i2c_client *client)
 {
-    struct aht10_data *data = i2c_get_clientdata(client);
-    struct mutex *mutex = &data->lock;
+        struct aht10_data *data = i2c_get_clientdata(client);
+        struct mutex *mutex = &data->lock;
 
-    int res;
-    u8 status;
+        int res;
+        u8 status;
 
-    mutex_lock(mutex);
+        mutex_lock(mutex);
 
-    usleep_range(AHT10_POWERON_USEC_DELAY, AHT10_POWERON_USEC_DELAY + AHT10_USEC_DELAY_OFFSET);
-    i2c_master_send(client, cmd_init, 3);
-    usleep_range(AHT10_CMD_USEC_DELAY, AHT10_CMD_USEC_DELAY + AHT10_USEC_DELAY_OFFSET);
+        usleep_range(AHT10_POWERON_USEC_DELAY, AHT10_POWERON_USEC_DELAY + 
+                AHT10_USEC_DELAY_OFFSET);
+        
+        i2c_master_send(client, cmd_init, 3);
+        
+        usleep_range(AHT10_CMD_USEC_DELAY, AHT10_CMD_USEC_DELAY + 
+                AHT10_USEC_DELAY_OFFSET);
 
-    res = i2c_master_recv(client, &status, 1);
+        res = i2c_master_recv(client, &status, 1);
 
-    if (res != 1) {
+        if (res != 1) {
+                mutex_unlock(mutex);
+                return 1;
+        }
+
+        data->initialized = 1;
+
+        if (status & AHT10_BUSY) {
+                pr_warn("AHT10 busy flag is enabled! Is another program already using the AHT10?\n");
+        }
+
         mutex_unlock(mutex);
-        return 1;
-    }
-
-    data->initialized = 1;
-
-    if (status & AHT10_BUSY) {
-        pr_warn("AHT10 busy flag is enabled! Is another program already using the AHT10?\n");
-    }
-
-    mutex_unlock(mutex);
-    return 0;
+        return 0;
 }
 
 /**
@@ -130,52 +134,57 @@ static int aht10_init(struct i2c_client *client)
  * Return: 0 if succesful, 1 if not
 */
 static int aht10_read_data(struct i2c_client *client,
-                        struct aht10_data *aht10_data, struct aht10_measurement *measurement){
-    u32 temp, hum;
-    int hum_i, temp_i;
-    int res;
-    struct mutex *mutex = &aht10_data->lock;
-    int was_locked = mutex_is_locked(mutex);
+                        struct aht10_data *aht10_data, 
+                        struct aht10_measurement *measurement)
+{
+        u32 temp, hum;
+        int hum_i, temp_i;
+        int res;
+        struct mutex *mutex = &aht10_data->lock;
+        int was_locked = mutex_is_locked(mutex);
 
-    u8 *raw_data = measurement->data;
-    mutex_lock(mutex);
-    if (!was_locked){
-        i2c_master_send(client, cmd_meas, 3);
-        usleep_range(AHT10_MEAS_USEC_DELAY, AHT10_MEAS_USEC_DELAY + AHT10_USEC_DELAY_OFFSET);
+        u8 *raw_data = measurement->data;
+        mutex_lock(mutex);
+        if (!was_locked){
+                i2c_master_send(client, cmd_meas, 3);
+                usleep_range(AHT10_MEAS_USEC_DELAY, AHT10_MEAS_USEC_DELAY + 
+                        AHT10_USEC_DELAY_OFFSET);
 
-        res = i2c_master_recv(client, raw_data, 6);
+                res = i2c_master_recv(client, raw_data, 6);
 
-        if (res != 6) {
-            mutex_unlock(mutex);
-            pr_warn("Did not receive 6 bytes from AHT10!\n");
-            return 1;
+                if (res != 6) {
+                        mutex_unlock(mutex);
+                        pr_warn("Did not receive 6 bytes from AHT10!\n");
+                        return 1;
+                }
+
+                temp = ((u32) (raw_data[3] & 0x0Fu) << 16u) | ((u32) raw_data[4] << 8u) | raw_data[5];
+                hum = ((u32) raw_data[1] << 12u) | ((u32) raw_data[2] << 4u) | (raw_data[3] & 0xF0u >> 4u);
+
+                /* 
+                 * Avoid doing float arithmetic, while trying to preserve 
+                 * precision. There must be a better way to do this (or 
+                 * by using 64 bit values)
+                */
+
+                temp = temp * 200;
+                temp = temp >> 10u;
+                temp = temp * 100;
+                temp = temp >> 10u;
+
+                hum = hum * 100;
+                hum = hum >> 10u;
+                hum = hum * 100;
+                hum = hum >> 10u;
+
+                temp_i = temp - 5000;
+                hum_i = hum;
+
+                measurement->temperature = temp_i;
+                measurement->humidity = hum_i;
         }
-
-        temp = ((u32) (raw_data[3] & 0x0Fu) << 16u) | ((u32) raw_data[4] << 8u) | raw_data[5];
-        hum = ((u32) raw_data[1] << 12u) | ((u32) raw_data[2] << 4u) | (raw_data[3] & 0xF0u >> 4u);
-
-        // Avoid doing float arithmetic, while trying to preserve precision
-        // There must be a better way to do this (or by using 64 bit values)
-        // temp = (temp * 200)/2^20 - 50
-
-        temp = temp * 200;
-        temp = temp >> 10u;
-        temp = temp * 100;
-        temp = temp >> 10u;
-
-        hum = hum * 100;
-        hum = hum >> 10u;
-        hum = hum * 100;
-        hum = hum >> 10u;
-
-        temp_i = temp - 5000;
-        hum_i = hum;
-
-        measurement->temperature = temp_i;
-        measurement->humidity = hum_i;
-    }
-    mutex_unlock(mutex);
-    return 0;
+        mutex_unlock(mutex);
+        return 0;
 }
 
 /**
@@ -186,13 +195,13 @@ static int aht10_read_data(struct i2c_client *client,
 */
 static int aht10_check_and_set_polltime(struct aht10_data *data)
 {
-    ktime_t current_time = ktime_get_boottime();
-    ktime_t difference = ktime_sub(current_time, data->previous_poll_time);
-    if (ktime_to_us(difference) >= ktime_to_us(data->poll_interval)) {
-        data->previous_poll_time = current_time;
-        return 1;
-    }
-    return 0;
+        ktime_t current_time = ktime_get_boottime();
+        ktime_t difference = ktime_sub(current_time, data->previous_poll_time);
+        if (ktime_to_us(difference) >= ktime_to_us(data->poll_interval)) {
+                data->previous_poll_time = current_time;
+                return 1;
+        }
+        return 0;
 }
 
 /**
@@ -201,17 +210,18 @@ static int aht10_check_and_set_polltime(struct aht10_data *data)
 static ssize_t temperature_show(struct device *dev,
                                     struct device_attribute *attr, char* buf)
 {
-    int bytes_written;
-    struct i2c_client *client = dev_get_drvdata(dev);
-    struct aht10_data *data = i2c_get_clientdata(client);
-    struct aht10_measurement *measurement = &data->current_measurement;
+        int bytes_written;
+        struct i2c_client *client = dev_get_drvdata(dev);
+        struct aht10_data *data = i2c_get_clientdata(client);
+        struct aht10_measurement *measurement = &data->current_measurement;
 
-    if (aht10_check_and_set_polltime(data)) {
-        aht10_read_data(client, data, measurement);
-    }
+        if (aht10_check_and_set_polltime(data)) {
+                aht10_read_data(client, data, measurement);
+        }
 
-    bytes_written = sprintf(buf, "%d.%d", measurement->temperature / 100, measurement->temperature % 100);
-    return bytes_written;
+        bytes_written = sprintf(buf, "%d.%d", measurement->temperature / 100, 
+                                measurement->temperature % 100);
+        return bytes_written;
 }
 
 
@@ -221,17 +231,18 @@ static ssize_t temperature_show(struct device *dev,
 static ssize_t humidity_show(struct device *dev,
                                     struct device_attribute *attr, char* buf)
 {
-    int bytes_written;
-    struct i2c_client *client = dev_get_drvdata(dev);
-    struct aht10_data *data = i2c_get_clientdata(client);
-    struct aht10_measurement *measurement = &data->current_measurement;
+        int bytes_written;
+        struct i2c_client *client = dev_get_drvdata(dev);
+        struct aht10_data *data = i2c_get_clientdata(client);
+        struct aht10_measurement *measurement = &data->current_measurement;
 
-    if (aht10_check_and_set_polltime(data)) {
-        aht10_read_data(client, data, measurement);
-    }
+        if (aht10_check_and_set_polltime(data)) {
+                aht10_read_data(client, data, measurement);
+        }
 
-    bytes_written = sprintf(buf, "%d.%d", measurement->humidity / 100, measurement->humidity % 100);
-    return bytes_written;
+        bytes_written = sprintf(buf, "%d.%d", measurement->humidity / 100, 
+                                measurement->humidity % 100);
+        return bytes_written;
 }
 
 /**
@@ -266,35 +277,37 @@ static ssize_t min_poll_interval_show(struct device *dev,
  * min_poll_interval_store() - store the given minimum poll interval. Input in milliseconds
 */
 static ssize_t min_poll_interval_store(struct device *dev,
-                        struct device_attribute *attr, const char *buf, size_t count)
+                        struct device_attribute *attr, 
+                        const char *buf, size_t count)
 {
-    struct i2c_client *client = dev_get_drvdata(dev);
-    struct aht10_data *data = i2c_get_clientdata(client);
-    int i;
-    u64 msecs;
-    int res;
+        struct i2c_client *client = dev_get_drvdata(dev);
+        struct aht10_data *data = i2c_get_clientdata(client);
+        int i;
+        u64 msecs;
+        int res;
 
-    char null_terminated[AHT10_MAX_POLL_INTERVAL_LEN + 1];
+        char null_terminated[AHT10_MAX_POLL_INTERVAL_LEN + 1];
 
-    if (count > AHT10_MAX_POLL_INTERVAL_LEN) {
-        pr_warn("AHT10: Warning! Input too long. Max characters: %d\n", AHT10_MAX_POLL_INTERVAL_LEN);
+        if (count > AHT10_MAX_POLL_INTERVAL_LEN) {
+                pr_warn("AHT10: Warning! Input too long. Max characters: %d\n", 
+                        AHT10_MAX_POLL_INTERVAL_LEN);
+                return count;
+        }
+
+        for (i = 0; i < count && i < AHT10_MAX_POLL_INTERVAL_LEN; i++) {
+                null_terminated[i] = buf[i];
+        }
+        null_terminated[i] = 0;
+
+        res = kstrtoull(null_terminated, 10, &msecs);
+
+        if (res) {
+                pr_warn("AHT10: Warning! Invalid input.\n");
+                return count;
+        }
+
+        data->poll_interval = ms_to_ktime(msecs);
         return count;
-    }
-
-    for (i = 0; i < count && i < AHT10_MAX_POLL_INTERVAL_LEN; i++) {
-        null_terminated[i] = buf[i];
-    }
-    null_terminated[i] = 0;
-
-    res = kstrtoull(null_terminated, 10, &msecs);
-
-    if (res) {
-        pr_warn("AHT10: Warning! Invalid input.\n");
-        return count;
-    }
-
-    data->poll_interval = ms_to_ktime(msecs);
-    return count;
 }
 
 static DEVICE_ATTR_WO(reset);
@@ -394,18 +407,7 @@ static struct i2c_driver aht10_driver = {
     .id_table   = aht10_id,
 };
 
-static int __init aht10_init_driver(void)
-{
-    return i2c_add_driver(&aht10_driver);
-}
-
-static void __exit aht10_exit_driver(void)
-{
-    return i2c_del_driver(&aht10_driver);
-}
-
-module_init(aht10_init_driver);
-module_exit(aht10_exit_driver);
+module_i2c_driver(&aht10_driver);
 
 MODULE_AUTHOR("Johannes Draaijer <jcdra1@gmail.com>");
 MODULE_DESCRIPTION("AHT10 Temperature and Humidity sensor driver");
