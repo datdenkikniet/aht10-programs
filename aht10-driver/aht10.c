@@ -63,16 +63,34 @@ struct aht10_measurement {
     int humidity;
 };
 
+/**
+ *   struct aht10_data - All the data required to operate an AHT10 chip
+ *   @client: the i2c client associated with the AHT10
+ *   @lock: a mutex that is used to prevent parallel access to the i2c client
+ *   @initialized: whether or not the AHT10 has been initialized
+ *   @current_measurement: the last-measured values of the AHT10
+ *   @poll_interval: the minimum poll interval
+ *                   While the poll rate is not 100% necessary, the datasheet recommends
+ *                   that a measurement is not performed more than once every 10 seconds
+ *                   to prevent the chip from "heating up". If it's unwanted, setting it
+ *                   to 0 will do the trick.
+*/
+
 struct aht10_data {
     struct i2c_client *client;
-    int initialized;
-    int number;
-    struct aht10_measurement current_measurement;
     struct mutex lock;
+    int initialized;
+    struct aht10_measurement current_measurement;
     ktime_t poll_interval;
     ktime_t previous_poll_time;
 };
 
+
+/**
+ * aht10_init() - Initialize the AHT10 chip
+ * @client: the i2c client associated with the AHT10
+ * Return: 0 if succesful, 1 if not
+*/
 static int aht10_init(struct i2c_client *client)
 {
     struct aht10_data *data = i2c_get_clientdata(client);
@@ -104,7 +122,15 @@ static int aht10_init(struct i2c_client *client)
     return 0;
 }
 
-static int aht10_read_data(struct i2c_client *client, struct aht10_data *aht10_data, struct aht10_measurement *measurement){
+/**
+ * aht10_read_data() - read and parse the raw data from the AHT10
+ * @client: the i2c client associated with the AHT10
+ * @aht10_data: the struct aht10_data to use for the lock
+ * @aht10_measurement: the struct aht10_measurement to store the raw and parsed values in
+ * Return: 0 if succesful, 1 if not
+*/
+static int aht10_read_data(struct i2c_client *client,
+                        struct aht10_data *aht10_data, struct aht10_measurement *measurement){
     u32 temp, hum;
     int hum_i, temp_i;
     int res;
@@ -152,6 +178,12 @@ static int aht10_read_data(struct i2c_client *client, struct aht10_data *aht10_d
     return 0;
 }
 
+/**
+ * aht10_check_and_set_polltime() - check if the minimum poll interval has expired,
+ *                                   and if so set the previous poll time
+ * @data: what time to compare (and possibly set)
+ * Return: 1 if the minimum poll interval has expired, 0 if not
+*/
 static int aht10_check_and_set_polltime(struct aht10_data *data)
 {
     ktime_t current_time = ktime_get_boottime();
@@ -163,6 +195,9 @@ static int aht10_check_and_set_polltime(struct aht10_data *data)
     return 0;
 }
 
+/**
+ * temperature_show() - show the temperature in Celcius
+*/
 static ssize_t temperature_show(struct device *dev,
                                     struct device_attribute *attr, char* buf)
 {
@@ -179,6 +214,10 @@ static ssize_t temperature_show(struct device *dev,
     return bytes_written;
 }
 
+
+/**
+ * humidity_show() - show the relative humidity in %H
+*/
 static ssize_t humidity_show(struct device *dev,
                                     struct device_attribute *attr, char* buf)
 {
@@ -195,6 +234,9 @@ static ssize_t humidity_show(struct device *dev,
     return bytes_written;
 }
 
+/**
+ * reset_store() - reset the ATH10
+*/
 static ssize_t reset_store(struct device *dev,
                         struct device_attribute *attr, const char *buf, size_t count)
 {
@@ -204,6 +246,9 @@ static ssize_t reset_store(struct device *dev,
     return count;
 }
 
+/**
+ * min_poll_interval_show() - show the minimum poll interval in milliseconds
+*/
 static ssize_t min_poll_interval_show(struct device *dev,
                                     struct device_attribute *attr, char* buf)
 {
@@ -217,6 +262,9 @@ static ssize_t min_poll_interval_show(struct device *dev,
     return bytes_written;
 }
 
+/**
+ * min_poll_interval_store() - store the given minimum poll interval. Input in milliseconds
+*/
 static ssize_t min_poll_interval_store(struct device *dev,
                         struct device_attribute *attr, const char *buf, size_t count)
 {
