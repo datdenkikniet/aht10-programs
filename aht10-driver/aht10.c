@@ -333,7 +333,6 @@ static int aht10_probe(struct i2c_client *client,
         return 1;
     }
 
-    data->number = 10;
     data->poll_interval = ns_to_ktime((u64) 10000 * NSEC_PER_MSEC);
     data->previous_poll_time = ns_to_ktime(0);
     i2c_set_clientdata(client, data);
