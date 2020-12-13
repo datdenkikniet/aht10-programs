@@ -22,6 +22,8 @@
 #include <linux/ktime.h>
 #include <linux/err.h>
 #include <asm/div64.h>
+#include <linux/hwmon.h>
+#include <linux/hwmon-sysfs.h>
 
 #define AHT10_ADDR 0x38
 
@@ -87,13 +89,13 @@ struct aht10_data {
 
 
 /**
- * aht10_init() - Initialize the AHT10 chip
+ * aht10_init() - Initialize an AHT10 chip
  * @client: the i2c client associated with the AHT10
+ * @data: the data associated with this AHT10 chip
  * Return: 0 if succesful, 1 if not
 */
-static int aht10_init(struct i2c_client *client)
+static int aht10_init(struct i2c_client *client, struct aht10_data *data)
 {
-        struct aht10_data *data = i2c_get_clientdata(client);
         struct mutex *mutex = &data->lock;
 
         int res;
@@ -211,8 +213,8 @@ static ssize_t temperature_show(struct device *dev,
                                     struct device_attribute *attr, char* buf)
 {
         int bytes_written;
-        struct i2c_client *client = dev_get_drvdata(dev);
-        struct aht10_data *data = i2c_get_clientdata(client);
+        struct aht10_data *data = dev_get_drvdata(dev);
+        struct i2c_client *client = data->client;
         struct aht10_measurement *measurement = &data->current_measurement;
 
         if (aht10_check_and_set_polltime(data)) {
@@ -232,8 +234,8 @@ static ssize_t humidity_show(struct device *dev,
                                     struct device_attribute *attr, char* buf)
 {
         int bytes_written;
-        struct i2c_client *client = dev_get_drvdata(dev);
-        struct aht10_data *data = i2c_get_clientdata(client);
+        struct aht10_data *data = dev_get_drvdata(dev);
+        struct i2c_client *client = data->client;
         struct aht10_measurement *measurement = &data->current_measurement;
 
         if (aht10_check_and_set_polltime(data)) {
@@ -251,8 +253,6 @@ static ssize_t humidity_show(struct device *dev,
 static ssize_t reset_store(struct device *dev,
                         struct device_attribute *attr, const char *buf, size_t count)
 {
-    // struct i2c_client *client = dev_get_drvdata(dev);
-    // struct aht10_data *data = i2c_get_clientdata(client);
     // TODO
     return count;
 }
@@ -263,14 +263,13 @@ static ssize_t reset_store(struct device *dev,
 static ssize_t min_poll_interval_show(struct device *dev,
                                     struct device_attribute *attr, char* buf)
 {
-    struct i2c_client *client = dev_get_drvdata(dev);
-    struct aht10_data *data = i2c_get_clientdata(client);
-    int bytes_written;
+        struct aht10_data *data = dev_get_drvdata(dev);
+        int bytes_written;
 
-    u64 usec = ktime_to_us(data->poll_interval);
-    do_div(usec, USEC_PER_MSEC);
-    bytes_written = sprintf(buf, "%lld", usec);
-    return bytes_written;
+        u64 usec = ktime_to_us(data->poll_interval);
+        do_div(usec, USEC_PER_MSEC);
+        bytes_written = sprintf(buf, "%lld", usec);
+        return bytes_written;
 }
 
 /**
@@ -280,8 +279,7 @@ static ssize_t min_poll_interval_store(struct device *dev,
                         struct device_attribute *attr, 
                         const char *buf, size_t count)
 {
-        struct i2c_client *client = dev_get_drvdata(dev);
-        struct aht10_data *data = i2c_get_clientdata(client);
+        struct aht10_data *data = dev_get_drvdata(dev);
         int i;
         u64 msecs;
         int res;
@@ -310,104 +308,93 @@ static ssize_t min_poll_interval_store(struct device *dev,
         return count;
 }
 
-static DEVICE_ATTR_WO(reset);
-static DEVICE_ATTR_RO(temperature);
-static DEVICE_ATTR_RO(humidity);
-static DEVICE_ATTR_RW(min_poll_interval);
+static SENSOR_DEVICE_ATTR(reset, S_IWUSR , NULL, reset_store, 0);
+static SENSOR_DEVICE_ATTR(temp1_input, S_IRUGO , temperature_show, NULL, 0);
+static SENSOR_DEVICE_ATTR(humidity1_input, S_IRUGO , humidity_show, NULL, 0);
+static SENSOR_DEVICE_ATTR(min_poll_interval, S_IRUGO | S_IWUSR , min_poll_interval_show, min_poll_interval_store, 0);
 
-static struct attribute *aht10_attributes[] = {
-    &dev_attr_reset.attr,
-    &dev_attr_temperature.attr,
-    &dev_attr_humidity.attr,
-    &dev_attr_min_poll_interval.attr,
+static struct attribute *aht10_attrs[] = {
+    &sensor_dev_attr_reset.dev_attr.attr,
+    &sensor_dev_attr_temp1_input.dev_attr.attr,
+    &sensor_dev_attr_humidity1_input.dev_attr.attr,
+    &sensor_dev_attr_min_poll_interval.dev_attr.attr,
     NULL,
 };
 
-static const struct attribute_group aht10_attribute_group = {
-    .attrs = aht10_attributes,
-};
-
-static struct device *dev;
+ATTRIBUTE_GROUPS(aht10);
 
 static int aht10_probe(struct i2c_client *client,
                     const struct i2c_device_id *aht10_id)
 {
-    struct device *device = &client->dev;
-    struct aht10_data *data;
-    int res = 0;
+        struct device *device = &client->dev;
+        struct device *hwmon_dev;
+        struct i2c_adapter *adapter = client->adapter;
+        struct aht10_data *data;
+        const struct attribute_group **attribute_groups = aht10_groups;
+        int res = 0;
+        
+        if (!i2c_check_functionality(adapter, I2C_FUNC_I2C))
+                return 0;
 
-    if (client->addr != AHT10_ADDR){
-        return 0;
-    }
+        if (client->addr != AHT10_ADDR)
+                return 0;
 
-    data = devm_kzalloc(device, sizeof(*data), GFP_KERNEL);
+        data = devm_kzalloc(device, sizeof(*data), GFP_KERNEL);
 
-    if (data == NULL) {
-        return 1;
-    }
+        if (!data)
+                return -ENOMEM;
 
-    data->poll_interval = ns_to_ktime((u64) 10000 * NSEC_PER_MSEC);
-    data->previous_poll_time = ns_to_ktime(0);
-    i2c_set_clientdata(client, data);
+        data->poll_interval = ns_to_ktime((u64) 10000 * NSEC_PER_MSEC);
+        data->previous_poll_time = ns_to_ktime(0);
+        data->client = client;
+        
+        i2c_set_clientdata(client, data);
+        
+        mutex_init(&data->lock);
 
-    mutex_init(&data->lock);
+        res = aht10_init(client, data);
 
-    res = aht10_init(client);
+        if (res)
+                return 2;
 
-    if (res) {
-        return 2;
-    }
+        hwmon_dev = devm_hwmon_device_register_with_groups(device,
+                                                        client->name,
+                                                        data,
+                                                        attribute_groups);
 
-    dev = root_device_register("aht10");
-    if (IS_ERR(dev)) {
-        return 3;
-    }
-
-    dev_set_drvdata(dev, client);
-    res = sysfs_create_group(&dev->kobj, &aht10_attribute_group);
-
-    if (res != 0) {
-        return 4;
-    }
-
-    pr_info("AHT10 was detected and registered\n");
-    return 0;
+        pr_info("AHT10 was detected and registered\n");
+        return PTR_ERR_OR_ZERO(hwmon_dev);
 }
 
 static int aht10_remove(struct i2c_client *client){
-    if (client->addr != AHT10_ADDR){
+        if (client->addr != AHT10_ADDR){
+                return 0;
+        }
+        pr_info("AHT10 was removed\n");
         return 0;
-    }
-
-    if (dev) {
-        root_device_unregister(dev);
-    }
-
-    pr_info("AHT10 was removed\n");
-    return 0;
 }
 
 static const struct i2c_device_id aht10_id[] = {
-    { "aht10", 0 },
-    { },
+        { "aht10", 0 },
+        { },
 };
 MODULE_DEVICE_TABLE(i2c, aht10_id);
 
 static const struct of_device_id aht10_of_match[] = {
-    { .compatible = "aht10,aht20", },
+        { .compatible = "aht10,aht20", },
 };
 
 static struct i2c_driver aht10_driver = {
-    .driver = {
-        .name = "aht10",
-        .of_match_table = aht10_of_match,
-    },
-    .probe      = aht10_probe,
-    .remove     = aht10_remove,
-    .id_table   = aht10_id,
+        .driver = {
+                .name = "aht10",
+                .of_match_table = aht10_of_match,
+        },
+        .probe      = aht10_probe,
+        .remove     = aht10_remove,
+        .id_table   = aht10_id,
 };
 
-module_i2c_driver(&aht10_driver);
+module_i2c_driver(aht10_driver);
 
 MODULE_AUTHOR("Johannes Draaijer <jcdra1@gmail.com>");
 MODULE_DESCRIPTION("AHT10 Temperature and Humidity sensor driver");
