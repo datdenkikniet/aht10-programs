@@ -1,4 +1,5 @@
 #AHT10 sysfs driver and i2c-dev based userland program
+The AHT10 is a relatively cheap temperature and humidity sensor. 
 
 aht10-driver contains the files needed to build a simple sysfs driver for the AHT10.
 
