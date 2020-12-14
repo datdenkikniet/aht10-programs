@@ -1,4 +1,4 @@
-# SPDX-License-Identifier: GPL-2.0-only
+# SPDX-License-Identifier: GPL-2.0-only OR BSD-2-Clause
 %YAML 1.2
 ---
 $id: http://devicetree.org/schemas/hwmon/aosong,aht10.yaml#
@@ -10,18 +10,18 @@ maintainers:
   - jcdra1@gmail.com
 
 description: |
-    Bindings description for the Aosong AHT10 temperature 
+    Bindings description for the Aosong AHT10 temperature
     and humidity sensor.
 
 properties:
   compatible:
     enum:
       - aosong,aht10
+
   reg:
     maxItems: 1
-    description:
-      The i2c address of the AHT10, which must be set to 0x38
-      
+    description: The i2c address of the AHT10, which must be set to 0x38
+
 required:
   - compatible
   - reg

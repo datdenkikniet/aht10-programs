@@ -54,12 +54,12 @@
  *   @lock: a mutex that is used to prevent parallel access to the
  *          i2c client
  *   @min_poll_interval: the minimum poll interval
- *                   While the poll rate is not 100% necessary,
+ *                   While the poll rate limit is not 100% necessary,
  *                   the datasheet recommends that a measurement
- *                   is not performed more too often to prevent
- *                   the chip from "heating up". If it's
- *                   unwanted, it can be ignored by setting
- *                   it to 0.
+ *                   is not performed too often to prevent
+ *                   the chip from warming up due to the heat it generates.
+ *                   If it's unwanted, it can be ignored setting it to
+ *                   it to 0. Default value is 2000 ms
  *   @previous_poll_time: the previous time that the AHT10
  *                        was polled
  *   @temperature: the latest temperature value received from
@@ -70,6 +70,10 @@
 
 struct aht10_data {
 	struct i2c_client *client;
+	/*
+	 * Prevent simultaneous access to the i2c
+	 * client
+	 */
 	struct mutex lock;
 	ktime_t min_poll_interval;
 	ktime_t previous_poll_time;
@@ -128,7 +132,7 @@ static int aht10_polltime_expired(struct aht10_data *data)
  * Return: 0 if succesfull, 1 if not
  */
 static int aht10_read_data(struct i2c_client *client,
-			struct aht10_data *data)
+			   struct aht10_data *data)
 {
 	const u8 cmd_meas[] = {AHT10_CMD_MEAS, 0x33, 0x00};
 	u32 temp, hum;
@@ -144,7 +148,7 @@ static int aht10_read_data(struct i2c_client *client,
 			return res;
 
 		usleep_range(AHT10_MEAS_USEC_DELAY,
-			AHT10_MEAS_USEC_DELAY + AHT10_USEC_DELAY_OFFSET);
+			     AHT10_MEAS_USEC_DELAY + AHT10_USEC_DELAY_OFFSET);
 
 		res = i2c_master_recv(client, raw_data, AHT10_MEAS_SIZE);
 		if (res != 6) {
@@ -162,7 +166,6 @@ static int aht10_read_data(struct i2c_client *client,
 		temp =  ((u32)(raw_data[3] & 0x0Fu) << 16u) |
 			((u32)raw_data[4] << 8u) |
 			raw_data[5];
-
 
 		temp = ((temp * 625) >> 15u) * 10;
 		hum = ((hum * 625) >> 16u) * 10;
@@ -198,7 +201,7 @@ static ssize_t min_poll_interval_show(struct device *dev,
  * min_poll_interval_store() - store the given minimum poll interval.
  * Input in milliseconds
  * Return: 0 on success, -EINVAL if a value lower than the
- *         AHT10_MIN_POLL_INTERVAL is given, and a negative 
+ *         AHT10_MIN_POLL_INTERVAL is given, and a negative
  *         error number if the input is invalid.
  */
 static ssize_t min_poll_interval_store(struct device *dev,
@@ -221,7 +224,7 @@ static ssize_t min_poll_interval_store(struct device *dev,
 }
 
 static SENSOR_DEVICE_ATTR(min_poll_interval, 0644, min_poll_interval_show,
-			 min_poll_interval_store, 0);
+			  min_poll_interval_store, 0);
 
 static struct attribute *aht10_attrs[] = {
 	&sensor_dev_attr_min_poll_interval.dev_attr.attr,
@@ -317,7 +320,7 @@ static const struct hwmon_chip_info aht10_chip_info = {
 };
 
 static int aht10_probe(struct i2c_client *client,
-		const struct i2c_device_id *aht10_id)
+		       const struct i2c_device_id *aht10_id)
 {
 	struct device *device = &client->dev;
 	struct device *hwmon_dev;
@@ -337,14 +340,15 @@ static int aht10_probe(struct i2c_client *client,
 
 	data->min_poll_interval = ns_to_ktime(AHT10_DEFAULT_MIN_POLL_INTERVAL *
 					     NSEC_PER_MSEC);
-	data->previous_poll_time = ns_to_ktime(0);
 	data->client = client;
-
-	i2c_set_clientdata(client, data);
 
 	mutex_init(&data->lock);
 
 	res = aht10_init(client, data);
+	if (res < 0)
+		return res;
+
+	res = aht10_read_data(data->client, data);
 	if (res < 0)
 		return res;
 
@@ -366,6 +370,7 @@ MODULE_DEVICE_TABLE(i2c, aht10_id);
 
 static const struct of_device_id aht10_of_match[] = {
 	{ .compatible = "aosong,aht10", },
+	{ },
 };
 
 MODULE_DEVICE_TABLE(of, aht10_of_match);
