@@ -1,0 +1,39 @@
+# SPDX-License-Identifier: GPL-2.0-only
+%YAML 1.2
+---
+$id: http://devicetree.org/schemas/hwmon/aosong,aht10.yaml#
+$schema: http://devicetree.org/meta-schemas/core.yaml#
+
+title: Aosong AHT10 Temperature and Humidity Sensor bindings
+
+maintainers:
+  - jcdra1@gmail.com
+
+description: |
+    Bindings description for the Aosong AHT10 temperature 
+    and humidity sensor.
+
+properties:
+  compatible:
+    enum:
+      - aosong,aht10
+  reg:
+    maxItems: 1
+    description:
+      The i2c address of the AHT10, which must be set to 0x38
+      
+required:
+  - compatible
+  - reg
+
+additionalProperties: false
+
+examples:
+  - |
+    i2c-1 {
+      aht10_i2c1: ath10@0x38 {
+        compatible = "aosong,aht10";
+        reg = <0x38>;
+      };
+    };
+...
