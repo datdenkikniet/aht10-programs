@@ -143,7 +143,6 @@ static int aht10_read_data(struct i2c_client *client,
 
 	mutex_lock(mutex);
 	if (aht10_polltime_expired(data)) {
-		pr_info("Measuring\n");
 		res = i2c_master_send(client, cmd_meas, sizeof(cmd_meas));
 		if (res < 0)
 			return res;
@@ -171,7 +170,7 @@ static int aht10_read_data(struct i2c_client *client,
 		temp = ((temp * 625) >> 15u) * 10;
 		hum = ((hum * 625) >> 16u) * 10;
 
-		temp_i = temp - 50000;
+		temp_i = (int) temp - 50000;
 
 		data->temperature = temp_i;
 		data->humidity = hum;
