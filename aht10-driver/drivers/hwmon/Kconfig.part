@@ -1,0 +1,30 @@
+config SENSORS_ADT7475
+    tristate "Analog Devices ADT7473, ADT7475, ADT7476 and ADT7490"
+    depends on I2C
+    select HWMON_VID
+    help
+      If you say yes here you get support for the Analog Devices
+      ADT7473, ADT7475, ADT7476 and ADT7490 hardware monitoring
+      chips.
+
+      This driver can also be built as a module. If so, the module
+      will be called adt7475.
+
+config SENSORS_AHT10
+    tristate "Aosong AHT10"
+    depends on I2C
+    help
+      If you say yes here, you get support for the Aosong AHT10
+      temperature and humidity sensors
+
+      This driver can also be built as a module. If so, the module
+      will be called aht10.
+
+config SENSORS_AS370
+    tristate "Synaptics AS370 SoC hardware monitoring driver"
+    help
+      If you say yes here you get support for the PVT sensors of
+      the Synaptics AS370 SoC
+
+      This driver can also be built as a module. If so, the module
+      will be called as370-hwmon.

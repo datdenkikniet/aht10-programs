@@ -368,17 +368,18 @@ static const struct i2c_device_id aht10_id[] = {
 };
 MODULE_DEVICE_TABLE(i2c, aht10_id);
 
-static const struct of_device_id aht10_of_match[] = {
-	{ .compatible = "aosong,aht10", },
-	{ },
-};
-
-MODULE_DEVICE_TABLE(of, aht10_of_match);
+/*
+ *static const struct of_device_id aht10_of_match[] = {
+ *	{ .compatible = "aosong,aht10", },
+ *	{ },
+ *};
+ *MODULE_DEVICE_TABLE(of, aht10_of_match);
+ *.of_match_table = of_match_ptr(aht10_of_match), (in .driver for i2c_driver)
+ */
 
 static struct i2c_driver aht10_driver = {
 	.driver = {
 		.name = "aht10",
-		.of_match_table = of_match_ptr(aht10_of_match),
 	},
 	.probe      = aht10_probe,
 	.id_table   = aht10_id,

@@ -1,0 +1,3 @@
+obj-$(CONFIG_SENSORS_ADT7475)	+= adt7475.o
+obj-$(CONFIG_SENSORS_AHT10)	+= aht10.o
+obj-$(CONFIG_SENSORS_AMD_ENERGY) += amd_energy.o
