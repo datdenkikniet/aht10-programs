@@ -182,58 +182,34 @@ static int aht10_read_data(struct i2c_client *client,
 }
 
 /**
- * min_poll_interval_show() - show the minimum poll interval
- *                            in milliseconds
- */
-static ssize_t min_poll_interval_show(struct device *dev,
-				      struct device_attribute *attr,
-				      char *buf)
-{
-	struct aht10_data *data = dev_get_drvdata(dev);
-	int res;
-	u64 usec = ktime_to_us(data->min_poll_interval);
-
-	do_div(usec, USEC_PER_MSEC);
-	res = sprintf(buf, "%lld", usec);
-	return res;
-}
-
-/**
- * min_poll_interval_store() - store the given minimum poll interval.
- * Input in milliseconds
+ * aht10_interval_write() - store the given minimum poll interval.
  * Return: 0 on success, -EINVAL if a value lower than the
- *         AHT10_MIN_POLL_INTERVAL is given, and a negative
- *         error number if the input is invalid.
+ *         AHT10_MIN_POLL_INTERVAL is given
  */
-static ssize_t min_poll_interval_store(struct device *dev,
-				       struct device_attribute *attr,
-				       const char *buf, size_t count)
+static ssize_t aht10_interval_write(struct aht10_data *data,
+				    long val)
 {
-	struct aht10_data *data = dev_get_drvdata(dev);
-	u64 msecs;
-	int res;
-
-	res = kstrtoull(buf, 10, &msecs);
-	if (res < 0)
-		return res;
-
-	if (msecs < AHT10_MIN_POLL_INTERVAL)
+	if (val < AHT10_MIN_POLL_INTERVAL)
 		return -EINVAL;
 
-	data->min_poll_interval = ms_to_ktime(msecs);
-	return count;
+	data->min_poll_interval = ms_to_ktime(val);
+	return 0;
 }
 
-static DEVICE_ATTR_RW(min_poll_interval);
-
-static struct attribute *aht10_attrs[] = {
-	&dev_attr_min_poll_interval.attr,
-	NULL,
-};
-ATTRIBUTE_GROUPS(aht10);
+/**
+ * aht10_interval_read() - read the minimum poll interval
+ *                            in milliseconds
+ */
+static ssize_t aht10_interval_read(struct aht10_data *data,
+				   long *val)
+{
+	u64 usec = ktime_to_ms(data->min_poll_interval);
+	*val = usec;
+	return 0;
+}
 
 /**
- * aht10_temperature1_read() - read the temperature
+ * aht10_temperature1_read() - read the temperature in millidegrees
  */
 static int aht10_temperature1_read(struct aht10_data *data, long *val)
 {
@@ -248,7 +224,7 @@ static int aht10_temperature1_read(struct aht10_data *data, long *val)
 }
 
 /**
- * aht10_humidity1_read() - read the relative humidity
+ * aht10_humidity1_read() - read the relative humidity in millipercent
  */
 static int aht10_humidity1_read(struct aht10_data *data, long *val)
 {
@@ -262,6 +238,20 @@ static int aht10_humidity1_read(struct aht10_data *data, long *val)
 	return 0;
 }
 
+static umode_t aht10_hwmon_visible(const void *data, enum hwmon_sensor_types type,
+				   u32 attr, int channel)
+{
+	switch (type) {
+	case hwmon_temp:
+	case hwmon_humidity:
+		return 0444;
+	case hwmon_chip:
+		return 0644;
+	default:
+		return 0;
+	}
+}
+
 static int aht10_hwmon_read(struct device *dev, enum hwmon_sensor_types type,
 			    u32 attr, int channel, long *val)
 {
@@ -272,26 +262,37 @@ static int aht10_hwmon_read(struct device *dev, enum hwmon_sensor_types type,
 		return aht10_temperature1_read(data, val);
 	case hwmon_humidity:
 		return aht10_humidity1_read(data, val);
+	case hwmon_chip:
+		return aht10_interval_read(data, val);
 	default:
-		return -ENOENT;
+		return -EINVAL;
 	}
 }
 
-static umode_t aht10_hwmon_visible(const void *data, enum hwmon_sensor_types type,
-				   u32 attr, int channel)
+static int aht10_hwmon_write(struct device *dev, enum hwmon_sensor_types type,
+			     u32 attr, int channel, long val)
 {
-	return 0444;
+	struct aht10_data *data = dev_get_drvdata(dev);
+
+	switch (type) {
+	case hwmon_chip:
+		return aht10_interval_write(data, val);
+	default:
+		return -EINVAL;
+	}
 }
 
 static const struct hwmon_channel_info *aht10_info[] = {
-	HWMON_CHANNEL_INFO(temp, hwmon_temp_input),
-	HWMON_CHANNEL_INFO(humidity, hwmon_humidity_input),
+	HWMON_CHANNEL_INFO(chip, HWMON_C_UPDATE_INTERVAL), 
+	HWMON_CHANNEL_INFO(temp, HWMON_T_INPUT),
+	HWMON_CHANNEL_INFO(humidity, HWMON_H_INPUT),
 	NULL,
 };
 
 static const struct hwmon_ops aht10_hwmon_ops = {
 	.is_visible = aht10_hwmon_visible,
 	.read = aht10_hwmon_read,
+	.write = aht10_hwmon_write,
 };
 
 static const struct hwmon_chip_info aht10_chip_info = {
@@ -311,8 +312,12 @@ static int aht10_probe(struct i2c_client *client,
 	if (client->addr != AHT10_ADDR)
 		return 0;
 
+	/*
+	 * Verify that the i2c adapter that is being used
+	 * supports actual i2c operation
+	 */
 	if (!i2c_check_functionality(adapter, I2C_FUNC_I2C))
-		return -ENOPROTOOPT;
+		return -ENOENT;
 
 	data = devm_kzalloc(device, sizeof(*data), GFP_KERNEL);
 	if (!data)
@@ -335,7 +340,7 @@ static int aht10_probe(struct i2c_client *client,
 							 client->name,
 							 data,
 							 &aht10_chip_info,
-							 aht10_groups);
+							 NULL);
 
 	pr_info("AHT10 was detected and registered\n");
 	return PTR_ERR_OR_ZERO(hwmon_dev);

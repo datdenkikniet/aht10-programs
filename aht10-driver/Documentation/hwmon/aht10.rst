@@ -1,3 +1,5 @@
+.. SPDX-License-Identifier: GPL-2.0
+
 Kernel driver aht10
 =====================
 
@@ -37,7 +39,7 @@ Sysfs entries
 ================= ============================================
 temp1_input       Measured temperature in millidegrees Celcius
 humidity1_input   Measured humidity in %H
-min_poll_interval The configured minimum interval for 
-                  polling the sensor, in milliseconds 
+min_poll_interval The minimum interval for polling the sensor,
+                  in milliseconds.
                   The default is 2000. Writable.
 ================= ============================================
