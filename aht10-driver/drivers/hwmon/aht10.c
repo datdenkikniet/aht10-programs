@@ -1,22 +1,15 @@
 // SPDX-License-Identifier: GPL-2.0-only
 
 /*
- * aht10.c - Linux hwmon driver for AHT10 I2C Temperature and Humidity sensor
+ * aht10.c - Linux hwmon driver for AHT10 Temperature and Humidity sensor
  * Copyright (C) 2020 Johannes Cornelis Draaijer
  */
 
-#include <asm/div64.h>
 #include <linux/delay.h>
-#include <linux/device.h>
-#include <linux/err.h>
 #include <linux/hwmon.h>
-#include <linux/hwmon-sysfs.h>
 #include <linux/i2c.h>
-#include <linux/kernel.h>
 #include <linux/ktime.h>
 #include <linux/module.h>
-#include <linux/mod_devicetable.h>
-#include <linux/mutex.h>
 
 #define AHT10_ADDR 0x38
 #define AHT10_MEAS_SIZE 6
@@ -87,12 +80,13 @@ struct aht10_data {
  * @data: the data associated with this AHT10 chip
  * Return: 0 if succesfull, 1 if not
  */
-static int aht10_init(struct i2c_client *client, struct aht10_data *data)
+static int aht10_init(struct aht10_data *data)
 {
 	const u8 cmd_init[] = {AHT10_CMD_INIT, AHT10_CAL_ENABLED | AHT10_MODE_CYC,
 			       0x00};
 	int res;
 	u8 status;
+	struct i2c_client *client = data->client;
 
 	res = i2c_master_send(client, cmd_init, 3);
 	if (res < 0)
@@ -126,18 +120,17 @@ static int aht10_polltime_expired(struct aht10_data *data)
 }
 
 /**
- * aht10_read_data() - read and parse the raw data from the AHT10
- * @client: the i2c client associated with the AHT10
+ * aht10_read_values() - read and parse the raw data from the AHT10
  * @aht10_data: the struct aht10_data to use for the lock
  * Return: 0 if succesfull, 1 if not
  */
-static int aht10_read_data(struct i2c_client *client,
-			   struct aht10_data *data)
+static int aht10_read_values(struct aht10_data *data)
 {
 	const u8 cmd_meas[] = {AHT10_CMD_MEAS, 0x33, 0x00};
 	u32 temp, hum;
 	int res;
 	u8 raw_data[AHT10_MEAS_SIZE];
+	struct i2c_client *client = data->client;
 
 	mutex_lock(&data->lock);
 	if (aht10_polltime_expired(data)) {
@@ -198,8 +191,7 @@ static ssize_t aht10_interval_write(struct aht10_data *data,
 static ssize_t aht10_interval_read(struct aht10_data *data,
 				   long *val)
 {
-	u64 usec = ktime_to_ms(data->min_poll_interval);
-	*val = usec;
+	*val = ktime_to_ms(data->min_poll_interval);
 	return 0;
 }
 
@@ -210,7 +202,7 @@ static int aht10_temperature1_read(struct aht10_data *data, long *val)
 {
 	int res;
 
-	res = aht10_read_data(data->client, data);
+	res = aht10_read_values(data);
 	if (res < 0)
 		return res;
 
@@ -225,7 +217,7 @@ static int aht10_humidity1_read(struct aht10_data *data, long *val)
 {
 	int res;
 
-	res = aht10_read_data(data->client, data);
+	res = aht10_read_values(data);
 	if (res < 0)
 		return res;
 
@@ -300,7 +292,6 @@ static int aht10_probe(struct i2c_client *client,
 {
 	struct device *device = &client->dev;
 	struct device *hwmon_dev;
-	struct i2c_adapter *adapter = client->adapter;
 	struct aht10_data *data;
 	int res;
 
@@ -311,7 +302,7 @@ static int aht10_probe(struct i2c_client *client,
 	 * Verify that the i2c adapter that is being used
 	 * supports actual i2c operation
 	 */
-	if (!i2c_check_functionality(adapter, I2C_FUNC_I2C))
+	if (!i2c_check_functionality(client->adapter, I2C_FUNC_I2C))
 		return -ENOENT;
 
 	data = devm_kzalloc(device, sizeof(*data), GFP_KERNEL);
@@ -323,11 +314,11 @@ static int aht10_probe(struct i2c_client *client,
 
 	mutex_init(&data->lock);
 
-	res = aht10_init(client, data);
+	res = aht10_init(data);
 	if (res < 0)
 		return res;
 
-	res = aht10_read_data(data->client, data);
+	res = aht10_read_values(data);
 	if (res < 0)
 		return res;
 
@@ -337,7 +328,7 @@ static int aht10_probe(struct i2c_client *client,
 							 &aht10_chip_info,
 							 NULL);
 
-	pr_info("AHT10 was detected and registered\n");
+	dev_info(hwmon_dev, "AHT10 successfully detected and registered.\n");
 	return PTR_ERR_OR_ZERO(hwmon_dev);
 }
 

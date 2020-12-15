@@ -6,3 +6,9 @@ all:
 
 clean:
 	make -C $(KERNEL) SUBDIRS=$(PWD) clean
+
+custom:
+	./local.sh
+
+custom-clean:
+	./local.sh clean

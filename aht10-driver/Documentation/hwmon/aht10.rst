@@ -24,22 +24,23 @@ Description
 
 The AHT10 is a Temperature and Humidity sensor
 
+The address of this i2c device may only be 0x38
 
 Usage Notes
 -----------
 
 This driver does not probe for AHT10 devices, as there is no reliable
-way to determine if a chip is or isn't an AHT10. The device has to be
-instantiated explicitly. See Documentation/i2c/instantiating-devices.rst
-for details.
+way to determine if an i2c chip is or isn't an AHT10. The device has
+to be instantiated explicitly with the address 0x38. See
+Documentation/i2c/instantiating-devices.rst for details.
 
 Sysfs entries
 -------------
 
-================= ============================================
-temp1_input       Measured temperature in millidegrees Celcius
-humidity1_input   Measured humidity in %H
-min_poll_interval The minimum interval for polling the sensor,
-                  in milliseconds.
-                  The default is 2000. Writable.
-================= ============================================
+=============== ============================================
+temp1_input     Measured temperature in millidegrees Celcius
+humidity1_input Measured humidity in %H
+update_interval The minimum interval for polling the sensor,
+                in milliseconds. Is writable, but may not be
+                lower than 2000
+=============== ============================================
