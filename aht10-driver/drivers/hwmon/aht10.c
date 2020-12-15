@@ -378,7 +378,7 @@ static struct i2c_driver aht10_driver = {
 
 module_i2c_driver(aht10_driver);
 
-MODULE_AUTHOR("Johannes Draaijer <jcdra1@gmail.com>");
+MODULE_AUTHOR("Johannes Cornelis Draaijer <jcdra1@gmail.com>");
 MODULE_DESCRIPTION("AHT10 Temperature and Humidity sensor driver");
 MODULE_VERSION("1.0");
 MODULE_LICENSE("GPL v2");
