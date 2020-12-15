@@ -26,10 +26,9 @@
 /*
  * Delays
  */
-#define AHT10_POWERON_USEC_DELAY 40000
 #define AHT10_MEAS_USEC_DELAY 80000
 #define AHT10_CMD_USEC_DELAY 350000
-#define AHT10_USEC_DELAY_OFFSET 100000
+#define AHT10_USEC_DELAY_EXTRA 100000
 
 /*
  * Command bytes
@@ -100,7 +99,7 @@ static int aht10_init(struct i2c_client *client, struct aht10_data *data)
 		return res;
 
 	usleep_range(AHT10_CMD_USEC_DELAY, AHT10_CMD_USEC_DELAY +
-		     AHT10_USEC_DELAY_OFFSET);
+		     AHT10_USEC_DELAY_EXTRA);
 
 	res = i2c_master_recv(client, &status, 1);
 	if (res != 1)
@@ -137,23 +136,21 @@ static int aht10_read_data(struct i2c_client *client,
 {
 	const u8 cmd_meas[] = {AHT10_CMD_MEAS, 0x33, 0x00};
 	u32 temp, hum;
-	int temp_i;
 	int res;
-	struct mutex *mutex = &data->lock;
 	u8 raw_data[AHT10_MEAS_SIZE];
 
-	mutex_lock(mutex);
+	mutex_lock(&data->lock);
 	if (aht10_polltime_expired(data)) {
 		res = i2c_master_send(client, cmd_meas, sizeof(cmd_meas));
 		if (res < 0)
 			return res;
 
 		usleep_range(AHT10_MEAS_USEC_DELAY,
-			     AHT10_MEAS_USEC_DELAY + AHT10_USEC_DELAY_OFFSET);
+			     AHT10_MEAS_USEC_DELAY + AHT10_USEC_DELAY_EXTRA);
 
 		res = i2c_master_recv(client, raw_data, AHT10_MEAS_SIZE);
 		if (res != 6) {
-			mutex_unlock(mutex);
+			mutex_unlock(&data->lock);
 			if (res >= 0)
 				return -ENODATA;
 			else
@@ -171,13 +168,11 @@ static int aht10_read_data(struct i2c_client *client,
 		temp = ((temp * 625) >> 15u) * 10;
 		hum = ((hum * 625) >> 16u) * 10;
 
-		temp_i = (int)temp - 50000;
-
-		data->temperature = temp_i;
+		data->temperature = (int)temp - 50000;
 		data->humidity = hum;
 		data->previous_poll_time = ktime_get_boottime();
 	}
-	mutex_unlock(mutex);
+	mutex_unlock(&data->lock);
 	return 0;
 }
 
@@ -283,7 +278,7 @@ static int aht10_hwmon_write(struct device *dev, enum hwmon_sensor_types type,
 }
 
 static const struct hwmon_channel_info *aht10_info[] = {
-	HWMON_CHANNEL_INFO(chip, HWMON_C_UPDATE_INTERVAL), 
+	HWMON_CHANNEL_INFO(chip, HWMON_C_UPDATE_INTERVAL),
 	HWMON_CHANNEL_INFO(temp, HWMON_T_INPUT),
 	HWMON_CHANNEL_INFO(humidity, HWMON_H_INPUT),
 	NULL,
