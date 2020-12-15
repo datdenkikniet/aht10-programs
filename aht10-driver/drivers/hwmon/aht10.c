@@ -340,7 +340,6 @@ static int aht10_probe(struct i2c_client *client,
 
 	data->min_poll_interval = ms_to_ktime(AHT10_DEFAULT_MIN_POLL_INTERVAL);
 	data->client = client;
-	data->previous_poll_time = ktime_sub(ktime_get_boottime(), ms_to_ktime(AHT10_DEFAULT_MIN_POLL_INTERVAL));
 
 	mutex_init(&data->lock);
 
