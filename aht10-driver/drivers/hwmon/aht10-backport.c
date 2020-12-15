@@ -18,6 +18,15 @@
 #include <linux/mod_devicetable.h>
 #include <linux/mutex.h>
 
+
+#define HWMON_CHANNEL_INFO(stype, ...)	\
+	(&(struct hwmon_channel_info) {	\
+		.type = hwmon_##stype,	\
+		.config = (u32 []) {	\
+			__VA_ARGS__, 0	\
+		}			\
+	})
+
 #define AHT10_ADDR 0x38
 #define AHT10_MEAS_SIZE 6
 #define AHT10_DEFAULT_MIN_POLL_INTERVAL 2000ll

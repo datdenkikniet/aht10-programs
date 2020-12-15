@@ -1,5 +1,5 @@
 PWD := $(shell pwd)
-obj-m += aht10.o
+obj-m += aht10-backport.o
 
 all:
 	make ARCH=arm CROSS_COMPILE=$(CROSS) -C $(KERNEL) SUBDIRS=$(PWD) modules
