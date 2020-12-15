@@ -1,2 +1,6 @@
+  "^anvo,.*":
+    description: Anvo-Systems Dresden GmbH
   "^aosong,.*":
     description: Guangzhou Aosong Electronics Co., Ltd.
+  "^apm,.*":
+    description: Applied Micro Circuits Corporation (APM)
