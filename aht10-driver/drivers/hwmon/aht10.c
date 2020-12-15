@@ -19,7 +19,7 @@
 
 #define AHT10_ADDR 0x38
 #define AHT10_MEAS_SIZE 6
-#define AHT10_DEFAULT_MIN_POLL_INTERVAL 10000ll
+#define AHT10_DEFAULT_MIN_POLL_INTERVAL 2000ll
 #define AHT10_MIN_POLL_INTERVAL 2000LL
 
 /*
@@ -143,6 +143,7 @@ static int aht10_read_data(struct i2c_client *client,
 
 	mutex_lock(mutex);
 	if (aht10_polltime_expired(data)) {
+		pr_info("Measuring\n");
 		res = i2c_master_send(client, cmd_meas, sizeof(cmd_meas));
 		if (res < 0)
 			return res;
