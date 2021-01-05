@@ -41,6 +41,6 @@ Sysfs entries
 temp1_input     Measured temperature in millidegrees Celcius
 humidity1_input Measured humidity in %H
 update_interval The minimum interval for polling the sensor,
-                in milliseconds. Is writable, but may not be
-                lower than 2000
+                in milliseconds. Writable. Must be at
+                least 2000.
 =============== ============================================

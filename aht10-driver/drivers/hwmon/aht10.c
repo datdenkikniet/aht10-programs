@@ -13,31 +13,35 @@
 
 #define AHT10_ADDR 0x38
 #define AHT10_MEAS_SIZE 6
-#define AHT10_DEFAULT_MIN_POLL_INTERVAL 2000ll
-#define AHT10_MIN_POLL_INTERVAL 2000LL
 
 /*
- * Delays
+ * Poll intervals (in milliseconds)
  */
-#define AHT10_MEAS_USEC_DELAY 80000
-#define AHT10_CMD_USEC_DELAY 350000
-#define AHT10_USEC_DELAY_EXTRA 100000
+#define AHT10_DEFAULT_MIN_POLL_INTERVAL	2000
+#define AHT10_MIN_POLL_INTERVAL		2000
+
+/*
+ * I2C command delays (in microseconds)
+ */
+#define AHT10_MEAS_DELAY	80000
+#define AHT10_CMD_DELAY		350000
+#define AHT10_DELAY_EXTRA	100000
 
 /*
  * Command bytes
  */
-#define AHT10_CMD_INIT 0b11100001
-#define AHT10_CMD_MEAS 0b10101100
-#define AHT10_CMD_RST  0b10111010
+#define AHT10_CMD_INIT	0b11100001
+#define AHT10_CMD_MEAS	0b10101100
+#define AHT10_CMD_RST	0b10111010
 
 /*
  * Flags in the answer byte/command
  */
 #define AHT10_CAL_ENABLED	BIT(3)
-#define AHT10_BUSY	BIT(7)
-#define AHT10_MODE_NOR	(BIT(5) | BIT(6))
-#define AHT10_MODE_CYC	BIT(5)
-#define AHT10_MODE_CMD	BIT(6)
+#define AHT10_BUSY		BIT(7)
+#define AHT10_MODE_NOR		(BIT(5) | BIT(6))
+#define AHT10_MODE_CYC		BIT(5)
+#define AHT10_MODE_CMD		BIT(6)
 
 #define AHT10_MAX_POLL_INTERVAL_LEN	30
 
@@ -65,7 +69,7 @@ struct aht10_data {
 	struct i2c_client *client;
 	/*
 	 * Prevent simultaneous access to the i2c
-	 * client
+	 * client and previous_poll_time
 	 */
 	struct mutex lock;
 	ktime_t min_poll_interval;
@@ -92,8 +96,8 @@ static int aht10_init(struct aht10_data *data)
 	if (res < 0)
 		return res;
 
-	usleep_range(AHT10_CMD_USEC_DELAY, AHT10_CMD_USEC_DELAY +
-		     AHT10_USEC_DELAY_EXTRA);
+	usleep_range(AHT10_CMD_DELAY, AHT10_CMD_DELAY +
+		     AHT10_DELAY_EXTRA);
 
 	res = i2c_master_recv(client, &status, 1);
 	if (res != 1)
@@ -138,8 +142,8 @@ static int aht10_read_values(struct aht10_data *data)
 		if (res < 0)
 			return res;
 
-		usleep_range(AHT10_MEAS_USEC_DELAY,
-			     AHT10_MEAS_USEC_DELAY + AHT10_USEC_DELAY_EXTRA);
+		usleep_range(AHT10_MEAS_DELAY,
+			     AHT10_MEAS_DELAY + AHT10_DELAY_EXTRA);
 
 		res = i2c_master_recv(client, raw_data, AHT10_MEAS_SIZE);
 		if (res != 6) {
@@ -152,7 +156,7 @@ static int aht10_read_values(struct aht10_data *data)
 
 		hum =   ((u32)raw_data[1] << 12u) |
 			((u32)raw_data[2] << 4u) |
-			(raw_data[3] & 0xF0u >> 4u);
+			((raw_data[3] & 0xF0u) >> 4u);
 
 		temp =  ((u32)(raw_data[3] & 0x0Fu) << 16u) |
 			((u32)raw_data[4] << 8u) |
@@ -177,10 +181,7 @@ static int aht10_read_values(struct aht10_data *data)
 static ssize_t aht10_interval_write(struct aht10_data *data,
 				    long val)
 {
-	if (val < AHT10_MIN_POLL_INTERVAL)
-		return -EINVAL;
-
-	data->min_poll_interval = ms_to_ktime(val);
+	data->min_poll_interval = ms_to_ktime(clamp_val(val, 2000, LONG_MAX));
 	return 0;
 }
 
@@ -252,7 +253,7 @@ static int aht10_hwmon_read(struct device *dev, enum hwmon_sensor_types type,
 	case hwmon_chip:
 		return aht10_interval_read(data, val);
 	default:
-		return -EINVAL;
+		return -EOPNOTSUPP;
 	}
 }
 
@@ -265,7 +266,7 @@ static int aht10_hwmon_write(struct device *dev, enum hwmon_sensor_types type,
 	case hwmon_chip:
 		return aht10_interval_write(data, val);
 	default:
-		return -EINVAL;
+		return -EOPNOTSUPP;
 	}
 }
 
@@ -295,13 +296,6 @@ static int aht10_probe(struct i2c_client *client,
 	struct aht10_data *data;
 	int res;
 
-	if (client->addr != AHT10_ADDR)
-		return 0;
-
-	/*
-	 * Verify that the i2c adapter that is being used
-	 * supports actual i2c operation
-	 */
 	if (!i2c_check_functionality(client->adapter, I2C_FUNC_I2C))
 		return -ENOENT;
 
@@ -328,7 +322,6 @@ static int aht10_probe(struct i2c_client *client,
 							 &aht10_chip_info,
 							 NULL);
 
-	dev_info(hwmon_dev, "AHT10 successfully detected and registered.\n");
 	return PTR_ERR_OR_ZERO(hwmon_dev);
 }
 
