@@ -11,7 +11,6 @@
 #include <linux/ktime.h>
 #include <linux/module.h>
 
-#define AHT10_ADDR 0x38
 #define AHT10_MEAS_SIZE 6
 
 /*
@@ -146,7 +145,7 @@ static int aht10_read_values(struct aht10_data *data)
 			     AHT10_MEAS_DELAY + AHT10_DELAY_EXTRA);
 
 		res = i2c_master_recv(client, raw_data, AHT10_MEAS_SIZE);
-		if (res != 6) {
+		if (res != AHT10_MEAS_SIZE) {
 			mutex_unlock(&data->lock);
 			if (res >= 0)
 				return -ENODATA;
